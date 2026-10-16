@@ -3,6 +3,21 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  build: {
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-db': ['dexie', 'dexie-react-hooks'],
+          'vendor-xlsx': ['xlsx'],
+          'vendor-pdf': ['jspdf', 'jspdf-autotable'],
+          'vendor-zip': ['jszip', 'file-saver'],
+          'vendor-icons': ['lucide-react']
+        }
+      }
+    }
+  },
   plugins: [
     react(),
     VitePWA({

@@ -19,9 +19,6 @@ export class FotoHidroDatabase extends Dexie {
 
 export const db = new FotoHidroDatabase();
 
-/**
- * Garante que o Condomínio padrão Luxor e Lutécia esteja sempre presente no IndexedDB.
- */
 export async function ensureDefaultCondo(): Promise<CondoStructure> {
   const existing = await db.condos.get(LUXOR_LUTECIA_CONDO.id);
   if (!existing) {
@@ -64,10 +61,13 @@ export async function savePhotoRecord(
   campaignId: string,
   condoId: string,
   target: MeterTarget,
-  photoBlob: Blob,
-  dimensions?: { width: number; height: number }
+  photoBlob?: Blob,
+  dimensions?: { width: number; height: number },
+  issueNote?: string
 ): Promise<PhotoRecord> {
   const now = Date.now();
+  const existing = await db.records.get(`${campaignId}:${target.targetId}`);
+
   const record: PhotoRecord = {
     id: `${campaignId}:${target.targetId}`,
     campaignId,
@@ -79,10 +79,11 @@ export async function savePhotoRecord(
     meterIndex: target.meterIndex,
     totalMeters: target.totalMeters,
     fileName: target.fileName,
-    photoBlob,
+    photoBlob: photoBlob ?? existing?.photoBlob,
+    issueNote: issueNote !== undefined ? issueNote : existing?.issueNote,
     capturedAt: now,
-    width: dimensions?.width,
-    height: dimensions?.height,
+    width: dimensions?.width ?? existing?.width,
+    height: dimensions?.height ?? existing?.height,
   };
 
   await db.transaction('rw', db.records, db.campaigns, async () => {

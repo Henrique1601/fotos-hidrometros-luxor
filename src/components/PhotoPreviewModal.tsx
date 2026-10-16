@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Camera, Download, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Camera, Download, Trash2, X } from 'lucide-react';
 import { MeterTarget, PhotoRecord } from '../types';
 import { triggerImmediatePhotoDownload } from '../lib/immediateDownload';
 
@@ -21,13 +21,19 @@ export const PhotoPreviewModal: React.FC<PhotoPreviewModalProps> = ({
   const [photoUrl, setPhotoUrl] = useState<string>('');
 
   useEffect(() => {
+    if (!record.photoBlob) {
+      setPhotoUrl('');
+      return;
+    }
     const url = URL.createObjectURL(record.photoBlob);
     setPhotoUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [record.photoBlob]);
 
   const handleDownloadNow = () => {
-    triggerImmediatePhotoDownload(record.photoBlob, target.fileName);
+    if (record.photoBlob) {
+      triggerImmediatePhotoDownload(record.photoBlob, target.fileName);
+    }
   };
 
   return (
@@ -49,29 +55,47 @@ export const PhotoPreviewModal: React.FC<PhotoPreviewModalProps> = ({
           </button>
         </div>
 
-        <div className="preview-image-container">
-          {photoUrl && <img src={photoUrl} alt={target.fileName} className="preview-image-full" />}
-        </div>
+        {record.issueNote && (
+          <div className="pending-Action-banner" style={{ marginTop: 0 }}>
+            <span>
+              <AlertTriangle size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+              Ocorrência registrada: <strong>{record.issueNote}</strong>
+            </span>
+          </div>
+        )}
+
+        {photoUrl ? (
+          <div className="preview-image-container">
+            <img src={photoUrl} alt={target.fileName} className="preview-image-full" />
+          </div>
+        ) : (
+          <div className="empty-state" style={{ padding: '28px', textAlign: 'center' }}>
+            <p>Nenhuma foto anexada (apenas ocorrência registrada).</p>
+          </div>
+        )}
 
         <div className="preview-meta-bar">
           <span>📅 {new Date(record.capturedAt).toLocaleString('pt-BR')}</span>
-          {record.width && record.height && (
+          {record.width && record.height && record.photoBlob && (
             <span>
-              📐 {record.width}×{record.height}px ({(record.photoBlob.size / 1024 / 1024).toFixed(2)} MB)
+              📐 {record.width}×{record.height}px (
+              {(record.photoBlob.size / 1024 / 1024).toFixed(2)} MB)
             </span>
           )}
         </div>
 
         <div className="preview-actions-row">
-          <button className="btn-secondary" onClick={handleDownloadNow}>
-            <Download size={18} /> Baixar {target.fileName}
-          </button>
+          {record.photoBlob && (
+            <button className="btn-secondary" onClick={handleDownloadNow}>
+              <Download size={18} /> Baixar {target.fileName}
+            </button>
+          )}
 
           <button className="btn-primary" onClick={onRetake}>
-            <Camera size={18} /> Refazer Foto
+            <Camera size={18} /> {record.photoBlob ? 'Refazer Foto' : 'Tirar Foto Agora'}
           </button>
 
-          <button className="btn-danger" onClick={onDelete} title="Excluir foto">
+          <button className="btn-danger" onClick={onDelete} title="Excluir registro">
             <Trash2 size={18} />
           </button>
         </div>

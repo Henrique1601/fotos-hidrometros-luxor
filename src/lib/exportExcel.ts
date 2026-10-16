@@ -3,10 +3,6 @@ import { saveAs } from 'file-saver';
 import { MeterTarget, PhotoCampaign, PhotoRecord } from '../types';
 import { sanitizeUnitForFileName } from '../data/luxorLutecia';
 
-/**
- * Exporta planilha Excel (.xlsx) de conferência com todos os 205 medidores (ou total do prédio),
- * indicando se a foto foi tirada, o nome do arquivo .jpg e a data/hora exata.
- */
 export function exportCampaignChecklistExcel(
   campaign: PhotoCampaign,
   targets: MeterTarget[],
@@ -17,16 +13,21 @@ export function exportCampaignChecklistExcel(
     const meterDesc =
       t.totalMeters === 1 ? '1 Medidor ( Único )' : `Medidor ${t.meterIndex} de ${t.totalMeters}`;
 
+    const status = rec?.photoBlob
+      ? 'FOTOGRAFADO'
+      : rec?.issueNote
+      ? `OCORRÊNCIA (${rec.issueNote})`
+      : 'PENDENTE';
+
     return {
       Setor: t.sector,
       Unidade: t.unitLabel,
       Medidor: meterDesc,
       'Total Medidores na Sala': t.totalMeters,
       'Arquivo da Foto': t.fileName,
-      Status: rec ? 'FOTOGRAFADO' : 'PENDENTE',
-      'Data/Hora da Captura': rec
-        ? new Date(rec.capturedAt).toLocaleString('pt-BR')
-        : '—',
+      Status: status,
+      'Ocorrência / Observação': rec?.issueNote || '—',
+      'Data/Hora': rec ? new Date(rec.capturedAt).toLocaleString('pt-BR') : '—',
       Resolução: rec?.width && rec?.height ? `${rec.width}x${rec.height}` : '—',
     };
   });
@@ -38,7 +39,8 @@ export function exportCampaignChecklistExcel(
     { wch: 22 },
     { wch: 24 },
     { wch: 24 },
-    { wch: 16 },
+    { wch: 22 },
+    { wch: 26 },
     { wch: 22 },
     { wch: 14 },
   ];

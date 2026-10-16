@@ -95,11 +95,19 @@ export const App: React.FC = () => {
 
   const handleSavePhoto = async (
     target: MeterTarget,
-    blob: Blob,
-    dims?: { width: number; height: number }
+    blob?: Blob,
+    dims?: { width: number; height: number },
+    issueNote?: string
   ) => {
     if (!activeCampaign) return;
-    await savePhotoRecord(activeCampaign.id, activeCampaign.condoId, target, blob, dims);
+    await savePhotoRecord(
+      activeCampaign.id,
+      activeCampaign.condoId,
+      target,
+      blob,
+      dims,
+      issueNote
+    );
   };
 
   const handleDeletePhoto = async (targetId: string) => {

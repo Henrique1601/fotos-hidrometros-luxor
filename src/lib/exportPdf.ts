@@ -41,10 +41,10 @@ export async function exportCampaignReportPdf(
   onProgress?: (percent: number) => void
 ): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const capturedCount = recordsMap.size;
+  const capturedCount = Array.from(recordsMap.values()).filter((r) => Boolean(r.photoBlob)).length;
+  const issueCount = Array.from(recordsMap.values()).filter((r) => Boolean(r.issueNote)).length;
   const totalCount = targets.length;
 
-  // Cabeçalho
   doc.setFillColor(7, 24, 34);
   doc.rect(0, 0, 210, 34, 'F');
 
@@ -57,38 +57,46 @@ export async function exportCampaignReportPdf(
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text(
-    `Campanha: ${campaign.name}  |  Progresso: ${capturedCount}/${totalCount} medidores fotografados`,
+    `Campanha: ${campaign.name}  |  Fotos: ${capturedCount}/${totalCount}  |  Ocorrências: ${issueCount}`,
     14,
     22
   );
   doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 28);
 
-  // Tabela Resumo de Conferência
   const tableBody = targets.map((t) => {
     const rec = recordsMap.get(t.targetId);
     const meterBadge =
       t.totalMeters === 1 ? '1 Medidor' : `Medidor ${t.meterIndex}/${t.totalMeters}`;
+    const statusText = rec?.photoBlob
+      ? 'OK (Fotografado)'
+      : rec?.issueNote
+      ? `OCORRÊNCIA: ${rec.issueNote}`
+      : 'PENDENTE';
     return [
       t.sector,
       t.unitLabel,
       meterBadge,
       t.fileName,
-      rec ? 'OK (Fotografado)' : 'PENDENTE',
+      statusText,
+      rec?.issueNote || '—',
       rec ? new Date(rec.capturedAt).toLocaleString('pt-BR') : '—',
     ];
   });
 
   autoTable(doc, {
     startY: 40,
-    head: [['Setor', 'Sala / Unidade', 'Medidor', 'Arquivo', 'Status', 'Data/Hora']],
+    head: [['Setor', 'Sala', 'Medidor', 'Arquivo', 'Status', 'Ocorrência', 'Data/Hora']],
     body: tableBody,
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 7.5, cellPadding: 1.8 },
     headStyles: { fillColor: [15, 118, 110], textColor: 255, fontStyle: 'bold' },
     didParseCell: (data) => {
       if (data.section === 'body' && data.column.index === 4) {
         const val = String(data.cell.raw);
         if (val.startsWith('OK')) {
           data.cell.styles.textColor = [16, 185, 129];
+          data.cell.styles.fontStyle = 'bold';
+        } else if (val.startsWith('OCORRÊNCIA')) {
+          data.cell.styles.textColor = [217, 119, 6];
           data.cell.styles.fontStyle = 'bold';
         } else {
           data.cell.styles.textColor = [239, 68, 68];
@@ -97,9 +105,9 @@ export async function exportCampaignReportPdf(
     },
   });
 
-  // Galeria de Fotos (4 fotos por página 2x2)
-  if (includePhotos && capturedCount > 0) {
-    const capturedTargets = targets.filter((t) => recordsMap.has(t.targetId));
+  const capturedTargets = targets.filter((t) => recordsMap.get(t.targetId)?.photoBlob);
+
+  if (includePhotos && capturedTargets.length > 0) {
     const cardsPerPage = 4;
 
     for (let i = 0; i < capturedTargets.length; i++) {
@@ -126,12 +134,10 @@ export async function exportCampaignReportPdf(
       const t = capturedTargets[i];
       const rec = recordsMap.get(t.targetId)!;
 
-      // Moldura do card
       doc.setDrawColor(203, 213, 225);
       doc.setFillColor(248, 250, 252);
       doc.roundedRect(x, y, 88, 116, 3, 3, 'FD');
 
-      // Cabeçalho colorido conforme quantidade de medidores (1 = Teal, 2 = Amarelo, 4 = Azul)
       if (t.totalMeters === 2) {
         doc.setFillColor(234, 179, 8);
         doc.setTextColor(20, 20, 20);
@@ -153,8 +159,10 @@ export async function exportCampaignReportPdf(
       doc.text(titleText, x + 4, y + 9);
 
       try {
-        const dataUrl = await blobToCompressedDataUrl(rec.photoBlob, 600, 0.75);
-        doc.addImage(dataUrl, 'JPEG', x + 4, y + 17, 80, 84);
+        if (rec.photoBlob) {
+          const dataUrl = await blobToCompressedDataUrl(rec.photoBlob, 600, 0.75);
+          doc.addImage(dataUrl, 'JPEG', x + 4, y + 17, 80, 82);
+        }
       } catch {
         doc.setTextColor(150, 150, 150);
         doc.text('Imagem indisponível', x + 20, y + 60);
@@ -163,8 +171,12 @@ export async function exportCampaignReportPdf(
       doc.setTextColor(71, 85, 105);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Arquivo: ${t.fileName}`, x + 4, y + 106);
-      doc.text(`Capturada: ${new Date(rec.capturedAt).toLocaleString('pt-BR')}`, x + 4, y + 112);
+      doc.text(
+        `Arquivo: ${t.fileName}${rec.issueNote ? ` (${rec.issueNote})` : ''}`,
+        x + 4,
+        y + 105
+      );
+      doc.text(`Capturada: ${new Date(rec.capturedAt).toLocaleString('pt-BR')}`, x + 4, y + 111);
     }
   }
 

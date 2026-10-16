@@ -10,6 +10,12 @@ import {
   getAutoDownloadPreference,
   setAutoDownloadPreference,
 } from '../lib/immediateDownload';
+import {
+  getTapShutterPreference,
+  getWatermarkPreference,
+  setTapShutterPreference,
+  setWatermarkPreference,
+} from '../lib/camera';
 
 describe('Luxor e Lutécia — Mapeamento Oficial de Salas e Medidores', () => {
   it('possui exatamente 140 unidades e 205 medidores conforme o PDF da HydroJEXE', () => {
@@ -59,11 +65,20 @@ describe('Luxor e Lutécia — Mapeamento Oficial de Salas e Medidores', () => {
     expect(condo.units[2].metersCount).toBe(4);
   });
 
-  it('persiste a preferência de download imediato automático', () => {
+  it('persiste as preferências de download imediato, carimbo (watermark) e toque na tela', () => {
     expect(getAutoDownloadPreference()).toBe(true);
     setAutoDownloadPreference(false);
     expect(getAutoDownloadPreference()).toBe(false);
     setAutoDownloadPreference(true);
-    expect(getAutoDownloadPreference()).toBe(true);
+
+    expect(getWatermarkPreference()).toBe(true);
+    setWatermarkPreference(false);
+    expect(getWatermarkPreference()).toBe(false);
+    setWatermarkPreference(true);
+
+    expect(getTapShutterPreference()).toBe(false);
+    setTapShutterPreference(true);
+    expect(getTapShutterPreference()).toBe(true);
+    setTapShutterPreference(false);
   });
 });

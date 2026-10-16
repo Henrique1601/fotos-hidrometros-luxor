@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowLeft,
   Camera,
   CheckCircle2,
   Download,
+  Eye,
   Search,
   SlidersHorizontal,
-  Eye,
+  Stamp,
 } from 'lucide-react';
 import { CondoStructure, MeterTarget, PhotoCampaign, PhotoRecord, SortMode } from '../types';
 import { expandUnitsToMeterTargets } from '../data/luxorLutecia';
@@ -17,12 +19,18 @@ import {
   setAutoDownloadPreference,
   triggerImmediatePhotoDownload,
 } from '../lib/immediateDownload';
+import { getWatermarkPreference, setWatermarkPreference } from '../lib/camera';
 
 interface CollectScreenProps {
   condo: CondoStructure;
   campaign: PhotoCampaign;
   records: PhotoRecord[];
-  onSavePhoto: (target: MeterTarget, blob: Blob, dims?: { width: number; height: number }) => Promise<void>;
+  onSavePhoto: (
+    target: MeterTarget,
+    blob?: Blob,
+    dims?: { width: number; height: number },
+    issueNote?: string
+  ) => Promise<void>;
   onDeletePhoto: (targetId: string) => Promise<void>;
   onBackHome: () => void;
   onGoToExport: () => void;
@@ -40,12 +48,13 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
   onNotify,
 }) => {
   const [selectedSector, setSelectedSector] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'done'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'done' | 'issue'>('all');
   const [sortMode, setSortMode] = useState<SortMode>('sheet');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [cameraTargetIndex, setCameraTargetIndex] = useState<number | null>(null);
   const [previewTarget, setPreviewTarget] = useState<MeterTarget | null>(null);
   const [autoDownload, setAutoDownload] = useState<boolean>(() => getAutoDownloadPreference());
+  const [watermarkOn, setWatermarkOn] = useState<boolean>(() => getWatermarkPreference());
 
   const recordsMap = useMemo(() => {
     const map = new Map<string, PhotoRecord>();
@@ -72,24 +81,32 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
   const filteredTargets = useMemo(() => {
     return allTargets.filter((t) => {
       if (selectedSector !== 'ALL' && t.sector !== selectedSector) return false;
-      const hasPhoto = recordsMap.has(t.targetId);
-      if (statusFilter === 'pending' && hasPhoto) return false;
+      const rec = recordsMap.get(t.targetId);
+      const hasPhoto = Boolean(rec?.photoBlob);
+      const hasIssue = Boolean(rec?.issueNote);
+
+      if (statusFilter === 'pending' && (hasPhoto || hasIssue)) return false;
       if (statusFilter === 'done' && !hasPhoto) return false;
+      if (statusFilter === 'issue' && !hasIssue) return false;
+
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();
         return (
           t.unitLabel.toLowerCase().includes(q) ||
           t.targetId.toLowerCase().includes(q) ||
-          t.fileName.toLowerCase().includes(q)
+          t.fileName.toLowerCase().includes(q) ||
+          (rec?.issueNote?.toLowerCase().includes(q) ?? false)
         );
       }
       return true;
     });
   }, [allTargets, selectedSector, statusFilter, searchQuery, recordsMap]);
 
-  const capturedCount = recordsMap.size;
+  const capturedCount = Array.from(recordsMap.values()).filter((r) => Boolean(r.photoBlob)).length;
+  const issueCount = Array.from(recordsMap.values()).filter((r) => Boolean(r.issueNote)).length;
   const totalCount = allTargets.length;
-  const progressPercent = totalCount > 0 ? Math.round((capturedCount / totalCount) * 100) : 0;
+  const progressPercent =
+    totalCount > 0 ? Math.round(((capturedCount + issueCount) / totalCount) * 100) : 0;
 
   const handleOpenNextPendingCamera = () => {
     const nextIdx = filteredTargets.findIndex((t) => !recordsMap.has(t.targetId));
@@ -108,6 +125,17 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
       next
         ? 'Download automático ATIVADO: toda foto tirada já baixa o .jpg nomeado!'
         : 'Download automático DESATIVADO: salvando apenas na memória do app.'
+    );
+  };
+
+  const handleToggleWatermark = () => {
+    const next = !watermarkOn;
+    setWatermarkOn(next);
+    setWatermarkPreference(next);
+    onNotify(
+      next
+        ? 'Carimbo na foto ATIVADO (Sala + Data/Hora gravados no rodapé da imagem)'
+        : 'Carimbo na foto DESATIVADO'
     );
   };
 
@@ -135,22 +163,37 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
           <div>
             <div className="collect-counter-big">
               <span>{capturedCount}</span>
-              <small> / {totalCount} medidores</small>
+              <small> / {totalCount} fotos</small>
+              {issueCount > 0 && (
+                <small style={{ color: '#facc15', marginLeft: 8 }}>
+                  ({issueCount} ocorrências)
+                </small>
+              )}
             </div>
             <p className="collect-Status-sub">
-              {totalCount - capturedCount === 0
-                ? '🎉 Todas as fotos foram concluídas!'
-                : `Faltam ${totalCount - capturedCount} fotos para completar o prédio`}
+              {totalCount - (capturedCount + issueCount) <= 0
+                ? '🎉 Todas as unidades foram verificadas!'
+                : `Faltam ${totalCount - (capturedCount + issueCount)} medidores pendentes`}
             </p>
           </div>
 
-          <button
-            className={`pill-toggle ${autoDownload ? 'active-cyan' : ''}`}
-            onClick={handleToggleAutoDownload}
-          >
-            <Download size={15} />
-            <span>Baixar foto na hora: {autoDownload ? 'SIM' : 'NÃO'}</span>
-          </button>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              className={`pill-toggle ${autoDownload ? 'active-cyan' : ''}`}
+              onClick={handleToggleAutoDownload}
+            >
+              <Download size={14} />
+              <span>Baixar na hora: {autoDownload ? 'SIM' : 'NÃO'}</span>
+            </button>
+
+            <button
+              className={`pill-toggle ${watermarkOn ? 'active-cyan' : ''}`}
+              onClick={handleToggleWatermark}
+            >
+              <Stamp size={14} />
+              <span>Carimbo Foto: {watermarkOn ? 'SIM' : 'NÃO'}</span>
+            </button>
+          </div>
         </div>
 
         <div className="progress-bar-track" style={{ margin: '12px 0 16px' }}>
@@ -231,8 +274,16 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
               className={`status-tab ${statusFilter === 'done' ? 'active' : ''}`}
               onClick={() => setStatusFilter('done')}
             >
-              Fotografados
+              Fotos
             </button>
+            {issueCount > 0 && (
+              <button
+                className={`status-tab ${statusFilter === 'issue' ? 'active' : ''}`}
+                onClick={() => setStatusFilter('issue')}
+              >
+                Ocorrências ({issueCount})
+              </button>
+            )}
           </div>
 
           <div className="sort-selector">
@@ -254,7 +305,8 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
       <div className="meters-grid">
         {filteredTargets.map((target, idx) => {
           const rec = recordsMap.get(target.targetId);
-          const isCaptured = Boolean(rec);
+          const isCaptured = Boolean(rec?.photoBlob);
+          const hasIssue = Boolean(rec?.issueNote);
 
           const colorClass =
             target.totalMeters === 2
@@ -266,9 +318,11 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
           return (
             <div
               key={target.targetId}
-              className={`meter-unit-card ${colorClass} ${isCaptured ? 'is-captured' : ''}`}
+              className={`meter-unit-card ${colorClass} ${
+                isCaptured ? 'is-captured' : hasIssue ? 'is-issue' : ''
+              }`}
               onClick={() => {
-                if (isCaptured && rec) {
+                if (rec) {
                   setPreviewTarget(target);
                 } else {
                   setCameraTargetIndex(idx);
@@ -279,6 +333,8 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
                 <span className="meter-card-sector">{target.sector}</span>
                 {isCaptured ? (
                   <CheckCircle2 size={18} className="emerald-icon" />
+                ) : hasIssue ? (
+                  <AlertTriangle size={17} className="amber-icon" />
                 ) : (
                   <Camera size={16} className="muted-icon" />
                 )}
@@ -296,26 +352,32 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
 
               <div className="meter-card-filename">{target.fileName}</div>
 
-              {isCaptured && rec && (
+              {hasIssue && rec?.issueNote && (
+                <div className="meter-issue-chip">⚠️ {rec.issueNote}</div>
+              )}
+
+              {rec && (
                 <div className="meter-card-actions" onClick={(e) => e.stopPropagation()}>
                   <button
                     className="mini-action-btn"
                     onClick={() => setPreviewTarget(target)}
-                    title="Ver foto"
+                    title="Ver detalhes"
                   >
                     <Eye size={13} /> Ver
                   </button>
-                  <button
-                    className="mini-action-btn"
-                    onClick={() => triggerImmediatePhotoDownload(rec.photoBlob, target.fileName)}
-                    title="Baixar .jpg novamente"
-                  >
-                    <Download size={13} /> .JPG
-                  </button>
+                  {rec.photoBlob && (
+                    <button
+                      className="mini-action-btn"
+                      onClick={() => triggerImmediatePhotoDownload(rec.photoBlob!, target.fileName)}
+                      title="Baixar .jpg novamente"
+                    >
+                      <Download size={13} /> .JPG
+                    </button>
+                  )}
                   <button
                     className="mini-action-btn"
                     onClick={() => setCameraTargetIndex(idx)}
-                    title="Refazer foto"
+                    title="Abrir câmera nesta sala"
                   >
                     <Camera size={13} />
                   </button>
@@ -329,6 +391,7 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
       {/* Modal de Câmera Fullscreen */}
       {cameraTargetIndex !== null && filteredTargets.length > 0 && (
         <CameraModal
+          condoName={condo.name}
           targets={filteredTargets}
           currentIndex={cameraTargetIndex}
           recordsMap={recordsMap}
@@ -339,7 +402,7 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
         />
       )}
 
-      {/* Modal de Visualização de Foto */}
+      {/* Modal de Visualização de Foto / Ocorrência */}
       {previewTarget && recordsMap.get(previewTarget.targetId) && (
         <PhotoPreviewModal
           target={previewTarget}
@@ -352,7 +415,7 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
           onDelete={async () => {
             await onDeletePhoto(previewTarget.targetId);
             setPreviewTarget(null);
-            onNotify(`Foto ${previewTarget.fileName} removida.`);
+            onNotify(`Registro de ${previewTarget.fileName} removido.`);
           }}
           onClose={() => setPreviewTarget(null)}
         />

@@ -3,8 +3,8 @@ import { db } from '../db/database';
 import { CondoStructure, PhotoCampaign, PhotoRecord } from '../types';
 
 interface SerializedRecord extends Omit<PhotoRecord, 'photoBlob'> {
-  photoBase64: string;
-  mimeType: string;
+  photoBase64?: string;
+  mimeType?: string;
 }
 
 interface BackupPayload {
@@ -46,11 +46,11 @@ export async function exportLocalBackupJson(): Promise<void> {
   const records: SerializedRecord[] = [];
   for (const r of rawRecords) {
     const { photoBlob, ...rest } = r;
-    const photoBase64 = await blobToBase64(photoBlob);
+    const photoBase64 = photoBlob ? await blobToBase64(photoBlob) : undefined;
     records.push({
       ...rest,
       photoBase64,
-      mimeType: photoBlob.type || 'image/jpeg',
+      mimeType: photoBlob?.type || 'image/jpeg',
     });
   }
 
@@ -82,7 +82,7 @@ export async function restoreLocalBackupJson(file: File): Promise<{
     const { photoBase64, mimeType, ...rest } = r;
     return {
       ...rest,
-      photoBlob: base64ToBlob(photoBase64, mimeType || 'image/jpeg'),
+      photoBlob: photoBase64 ? base64ToBlob(photoBase64, mimeType || 'image/jpeg') : undefined,
     };
   });
 

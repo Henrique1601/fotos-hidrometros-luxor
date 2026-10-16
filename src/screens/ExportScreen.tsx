@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import {
+  AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   Camera,
+  CheckCircle2,
+  Download,
   FileSpreadsheet,
   FileText,
   FolderArchive,
+  Layers,
   Share2,
-  CheckCircle2,
-  AlertCircle,
 } from 'lucide-react';
 import { CondoStructure, PhotoCampaign, PhotoRecord } from '../types';
 import { expandUnitsToMeterTargets } from '../data/luxorLutecia';
@@ -44,22 +47,45 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
     return map;
   }, [records]);
 
-  const capturedCount = recordsMap.size;
-  const pendingCount = targets.length - capturedCount;
+  const photoRecords = useMemo(() => records.filter((r) => Boolean(r.photoBlob)), [records]);
+  const capturedCount = photoRecords.length;
+  const issueCount = useMemo(
+    () => records.filter((r) => Boolean(r.issueNote)).length,
+    [records]
+  );
+  const pendingCount = targets.length - recordsMap.size;
 
-  const handleDownloadZip = async () => {
-    if (records.length === 0) {
-      onNotify('Nenhuma foto capturada ainda para gerar o ZIP.');
+  const handleDownloadZip = async (sectorFilter?: string) => {
+    const valid = sectorFilter
+      ? photoRecords.filter((r) => r.sector === sectorFilter)
+      : photoRecords;
+
+    if (valid.length === 0) {
+      onNotify(
+        sectorFilter
+          ? `Nenhuma foto capturada no setor "${sectorFilter}" ainda.`
+          : 'Nenhuma foto capturada ainda para gerar o ZIP.'
+      );
       return;
     }
-    setBusyTask('Gerando pacote ZIP em alta definição...');
+
+    setBusyTask(
+      sectorFilter
+        ? `Gerando ZIP de ${sectorFilter}...`
+        : 'Gerando pacote ZIP geral em alta definição...'
+    );
     setProgress(0);
     try {
-      await exportCampaignPhotosZip(campaign, records, {
+      await exportCampaignPhotosZip(campaign, photoRecords, {
         organizeBySector,
+        sectorFilter,
         onProgress: setProgress,
       });
-      onNotify('Arquivo ZIP baixado com sucesso!');
+      onNotify(
+        sectorFilter
+          ? `ZIP de ${sectorFilter} baixado com sucesso!`
+          : 'Arquivo ZIP geral baixado com sucesso!'
+      );
     } catch {
       onNotify('Erro ao gerar o arquivo ZIP.');
     } finally {
@@ -68,14 +94,14 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
   };
 
   const handleShareZip = async () => {
-    if (records.length === 0) {
+    if (photoRecords.length === 0) {
       onNotify('Nenhuma foto para compartilhar.');
       return;
     }
     setBusyTask('Preparando ZIP para compartilhamento...');
     setProgress(0);
     try {
-      const blob = await exportCampaignPhotosZip(campaign, records, {
+      const blob = await exportCampaignPhotosZip(campaign, photoRecords, {
         organizeBySector,
         onProgress: setProgress,
       });
@@ -92,7 +118,7 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
         onNotify('O arquivo ZIP já foi baixado no seu aparelho!');
       }
     } catch {
-      // user cancelled share or unsupported
+      // ignore cancel
     } finally {
       setBusyTask(null);
     }
@@ -146,6 +172,13 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
             <span className="stat-value">{capturedCount}</span>
             <span className="stat-label">Fotos Capturadas</span>
           </div>
+          {issueCount > 0 && (
+            <div className="stat-chip highlight-yellow">
+              <AlertTriangle size={20} className="amber-icon" />
+              <span className="stat-value">{issueCount}</span>
+              <span className="stat-label">Ocorrências</span>
+            </div>
+          )}
           <div className="stat-chip">
             <AlertCircle size={20} className="amber-icon" />
             <span className="stat-value">{pendingCount}</span>
@@ -159,7 +192,7 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
 
         {pendingCount > 0 && (
           <div className="pending-Action-banner">
-            <span>Ainda restam {pendingCount} medidores sem foto.</span>
+            <span>Ainda restam {pendingCount} medidores pendentes.</span>
             <button className="btn-primary btn-sm" onClick={onBackToCollect}>
               <Camera size={15} /> Continuar Fotografando
             </button>
@@ -177,12 +210,48 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
         </section>
       )}
 
-      {/* Pacote ZIP das Fotos */}
+      {/* NOVO: Pacote ZIP Separado por Andar (Ideal para WhatsApp) */}
+      <section className="glass-card export-option-card">
+        <div className="export-option-header">
+          <Layers size={28} className="cyan-icon" />
+          <div>
+            <h3>Baixar ZIP Separado por Andar (Ideal p/ WhatsApp)</h3>
+            <p>
+              Gere arquivos ZIP menores apenas do pavimento desejado para enviar rápido pelo celular:
+            </p>
+          </div>
+        </div>
+
+        <div className="sector-zip-grid">
+          {condo.sectors.map((sec) => {
+            const secTotal = targets.filter((t) => t.sector === sec).length;
+            const secPhotos = photoRecords.filter((r) => r.sector === sec).length;
+            return (
+              <button
+                key={sec}
+                className="sector-zip-btn"
+                disabled={Boolean(busyTask) || secPhotos === 0}
+                onClick={() => handleDownloadZip(sec)}
+              >
+                <div className="sector-zip-top">
+                  <strong>{sec}</strong>
+                  <Download size={15} />
+                </div>
+                <span className="sector-zip-count">
+                  {secPhotos} / {secTotal} fotos
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Pacote ZIP Geral */}
       <section className="glass-card export-option-card">
         <div className="export-option-header">
           <FolderArchive size={28} className="cyan-icon" />
           <div>
-            <h3>Pacote ZIP com Todas as Fotos (.JPG)</h3>
+            <h3>Pacote ZIP Completo ({capturedCount} Fotos)</h3>
             <p>
               Todas as fotos já nomeadas perfeitamente (ex: <code>501.jpg</code>,{' '}
               <code>502-1.jpg</code>, <code>502-2.jpg</code>, <code>Estacionamento-1.jpg</code>).
@@ -205,15 +274,15 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
         <div className="export-buttons-row">
           <button
             className="btn-primary"
-            disabled={ Boolean(busyTask) }
-            onClick={handleDownloadZip}
+            disabled={Boolean(busyTask)}
+            onClick={() => handleDownloadZip()}
           >
-            <FolderArchive size={18} /> Baixar ZIP de Todas as Fotos
+            <FolderArchive size={18} /> Baixar ZIP Geral Completo
           </button>
 
           <button
             className="btn-secondary"
-            disabled={ Boolean(busyTask) }
+            disabled={Boolean(busyTask)}
             onClick={handleShareZip}
           >
             <Share2 size={18} /> Compartilhar ZIP (WhatsApp / Drive)
@@ -228,7 +297,8 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
           <div>
             <h3>Relatório Fotográfico em PDF</h3>
             <p>
-              Documento formatado com tabela de status e galeria visual das fotos com data e hora.
+              Documento formatado com tabela de status, ocorrências registradas e galeria visual das
+              fotos com data e hora.
             </p>
           </div>
         </div>
@@ -244,7 +314,7 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
 
         <button
           className="btn-primary"
-          disabled={ Boolean(busyTask) }
+          disabled={Boolean(busyTask)}
           onClick={handleDownloadPdf}
         >
           <FileText size={18} /> Baixar Relatório PDF
@@ -258,15 +328,15 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
           <div>
             <h3>Planilha Excel de Conferência (.XLSX)</h3>
             <p>
-              Checklist completo das {targets.length} fotos (Setor, Sala, Medidor, Nome do Arquivo,
-              Status e Horário da Foto).
+              Checklist completo das {targets.length} unidades (Setor, Sala, Medidor, Arquivo,
+              Status, Ocorrências e Horário).
             </p>
           </div>
         </div>
 
         <button
           className="btn-secondary"
-          disabled={ Boolean(busyTask) }
+          disabled={Boolean(busyTask)}
           onClick={handleDownloadExcel}
         >
           <FileSpreadsheet size={18} /> Baixar Planilha de Conferência (.xlsx)

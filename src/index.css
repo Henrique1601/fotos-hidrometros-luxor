@@ -1165,3 +1165,139 @@ body {
   max-width: 92vw;
   text-align: center;
 }
+
+
+/* Occurrence & Per-Floor ZIP Additions */
+.meter-unit-card.is-issue {
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.16) 0%, rgba(10, 29, 42, 0.92) 100%);
+}
+
+.meter-issue-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fde047;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.hud-issue-tag {
+  color: #fde047;
+  font-weight: 700;
+}
+
+.tap-anywhere-hint {
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.76rem;
+  color: var(--cyan-primary);
+  background: rgba(7, 24, 34, 0.85);
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(94, 234, 212, 0.3);
+}
+
+.camera-issue-popup {
+  position: absolute;
+  bottom: 18px;
+  left: 16px;
+  right: 16px;
+  max-width: 440px;
+  margin: 0 auto;
+  background: rgba(11, 34, 48, 0.97);
+  border: 1.5px solid #facc15;
+  border-radius: 16px;
+  padding: 14px;
+  z-index: 1020;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+}
+
+.issue-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #fde047;
+  margin-bottom: 10px;
+}
+
+.issue-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.issue-option-btn {
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  background: rgba(7, 24, 34, 0.9);
+  color: var(--text-main);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.issue-option-btn:hover {
+  background: rgba(250, 204, 21, 0.18);
+  border-color: #facc15;
+}
+
+.issue-trigger-btn {
+  border-color: rgba(250, 204, 21, 0.45);
+  color: #fde047;
+}
+
+.sector-zip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.sector-zip-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(94, 234, 212, 0.35);
+  background: rgba(7, 24, 34, 0.8);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.12s, border-color 0.12s;
+}
+
+.sector-zip-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--cyan-primary);
+  background: rgba(94, 234, 212, 0.12);
+}
+
+.sector-zip-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sector-zip-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--cyan-primary);
+  font-family: var(--font-display);
+  font-size: 0.86rem;
+}
+
+.sector-zip-count {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
