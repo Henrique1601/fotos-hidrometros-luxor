@@ -10,11 +10,13 @@ import {
   Upload,
   Droplets,
   CheckCircle2,
+  Images,
 } from 'lucide-react';
 import { CondoStructure, PhotoCampaign, PhotoRecord } from '../types';
 import { expandUnitsToMeterTargets } from '../data/luxorLutecia';
 import { exportLocalBackupJson, restoreLocalBackupJson } from '../lib/backup';
 import { ImportCondoModal } from '../components/ImportCondoModal';
+import { ImportBatchPhotosModal } from '../components/ImportBatchPhotosModal';
 
 interface HomeScreenProps {
   condos: CondoStructure[];
@@ -63,6 +65,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [year, setYear] = useState(now.getFullYear());
   const [customName, setCustomName] = useState('');
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
   const backupInputRef = useRef<HTMLInputElement | null>(null);
 
   const totalMetersInCondo = expandUnitsToMeterTargets(selectedCondo.units).length;
@@ -116,9 +119,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <h2>Condomínio / Edifício Ativo</h2>
           </div>
 
-          <button className="btn-secondary btn-sm" onClick={() => setShowImportModal(true)}>
-            <FileSpreadsheet size={15} /> Importar Planilha
-          </button>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button className="btn-primary btn-sm" onClick={() => setShowBatchModal(true)}>
+              <Images size={15} /> Subir Fotos da Medição
+            </button>
+            <button className="btn-secondary btn-sm" onClick={() => setShowImportModal(true)}>
+              <FileSpreadsheet size={15} /> Importar Planilha
+            </button>
+          </div>
         </div>
 
         <div className="condo-selector-bar">
@@ -336,6 +344,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <ImportCondoModal
           onImported={onImportCondo}
           onClose={() => setShowImportModal(false)}
+        />
+      )}
+
+      {showBatchModal && (
+        <ImportBatchPhotosModal
+          condo={selectedCondo}
+          campaigns={campaigns}
+          onSuccess={onNotify}
+          onClose={() => setShowBatchModal(false)}
         />
       )}
     </div>
