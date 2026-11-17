@@ -30,7 +30,7 @@ export const App: React.FC = () => {
     [],
     []
   );
-  const allRecords = useLiveQuery(() => db.records.toArray(), [], []);
+  const allRecords = useLiveQuery(() => db.recordMetas.toArray(), [], []);
 
   const selectedCondo: CondoStructure =
     condos.find((c) => c.id === selectedCondoId) || condos[0] || LUXOR_LUTECIA_CONDO;

@@ -54,15 +54,18 @@ export function setTapShutterPreference(enabled: boolean): void {
 }
 
 /**
- * Solicita acesso à câmera traseira em ALTA DEFINIÇÃO MÁXIMA do sensor.
+ * Solicita acesso à câmera traseira em Full HD (1920x1080) a 24 FPS.
+ * Evita superaquecimento, lentidão no toque e drenagem excessiva de bateria
+ * que ocorrem quando o stream ao vivo roda em 4K 60fps.
  */
 export async function openHighResCameraStream(): Promise<MediaStream> {
   const constraints: MediaStreamConstraints = {
     audio: false,
     video: {
       facingMode: { ideal: 'environment' },
-      width: { ideal: 3840, min: 1280 },
-      height: { ideal: 2160, min: 720 },
+      width: { ideal: 1920, min: 1280 },
+      height: { ideal: 1080, min: 720 },
+      frameRate: { ideal: 24, max: 30 },
     },
   };
 
@@ -180,7 +183,7 @@ export function drawWatermarkOnCanvas(
  */
 export async function captureHighResFrame(
   video: HTMLVideoElement,
-  quality = 0.96,
+  quality = 0.9,
   stamp?: PhotoStampInfo
 ): Promise<CapturedPhotoResult> {
   const width = video.videoWidth || 1920;
@@ -190,7 +193,7 @@ export async function captureHighResFrame(
   canvas.width = width;
   canvas.height = height;
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) {
     throw new Error('Não foi possível inicializar o contexto 2D da imagem.');
   }

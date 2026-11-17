@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   Images,
 } from 'lucide-react';
-import { CondoStructure, PhotoCampaign, PhotoRecord } from '../types';
+import { CondoStructure, PhotoCampaign, PhotoRecordMeta } from '../types';
 import { expandUnitsToMeterTargets } from '../data/luxorLutecia';
 import { exportLocalBackupJson, restoreLocalBackupJson } from '../lib/backup';
 import { ImportCondoModal } from '../components/ImportCondoModal';
@@ -22,7 +22,7 @@ interface HomeScreenProps {
   condos: CondoStructure[];
   selectedCondo: CondoStructure;
   campaigns: PhotoCampaign[];
-  allRecords: PhotoRecord[];
+  allRecords: PhotoRecordMeta[];
   onSelectCondo: (condo: CondoStructure) => void;
   onImportCondo: (condo: CondoStructure) => Promise<void>;
   onCreateCampaign: (name: string, month: number, year: number) => Promise<void>;

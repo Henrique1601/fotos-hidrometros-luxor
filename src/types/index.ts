@@ -69,3 +69,25 @@ export interface PhotoRecord {
   width?: number;
   height?: number;
 }
+
+/**
+ * Metadados leves sem o Blob binário da imagem, para manter a UI e a câmera
+ * com consumo mínimo de memória RAM e bateria.
+ */
+export interface PhotoRecordMeta {
+  id: string;
+  campaignId: string;
+  condoId: string;
+  targetId: string;
+  unitId: string;
+  unitLabel: string;
+  sector: string;
+  meterIndex: number;
+  totalMeters: number;
+  fileName: string;
+  hasPhoto: boolean;
+  issueNote?: string;
+  capturedAt: number;
+  width?: number;
+  height?: number;
+}

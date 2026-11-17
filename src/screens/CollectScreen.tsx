@@ -10,8 +10,9 @@ import {
   SlidersHorizontal,
   Stamp,
 } from 'lucide-react';
-import { CondoStructure, MeterTarget, PhotoCampaign, PhotoRecord, SortMode } from '../types';
+import { CondoStructure, MeterTarget, PhotoCampaign, PhotoRecordMeta, SortMode } from '../types';
 import { expandUnitsToMeterTargets } from '../data/luxorLutecia';
+import { getPhotoRecordById } from '../db/database';
 import { CameraModal } from '../components/CameraModal';
 import { PhotoPreviewModal } from '../components/PhotoPreviewModal';
 import {
@@ -24,7 +25,7 @@ import { getWatermarkPreference, setWatermarkPreference } from '../lib/camera';
 interface CollectScreenProps {
   condo: CondoStructure;
   campaign: PhotoCampaign;
-  records: PhotoRecord[];
+  records: PhotoRecordMeta[];
   onSavePhoto: (
     target: MeterTarget,
     blob?: Blob,
@@ -57,7 +58,7 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
   const [watermarkOn, setWatermarkOn] = useState<boolean>(() => getWatermarkPreference());
 
   const recordsMap = useMemo(() => {
-    const map = new Map<string, PhotoRecord>();
+    const map = new Map<string, PhotoRecordMeta>();
     for (const r of records) {
       map.set(r.targetId, r);
     }
@@ -82,7 +83,7 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
     return allTargets.filter((t) => {
       if (selectedSector !== 'ALL' && t.sector !== selectedSector) return false;
       const rec = recordsMap.get(t.targetId);
-      const hasPhoto = Boolean(rec?.photoBlob);
+      const hasPhoto = Boolean(rec?.hasPhoto);
       const hasIssue = Boolean(rec?.issueNote);
 
       if (statusFilter === 'pending' && (hasPhoto || hasIssue)) return false;
@@ -102,7 +103,7 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
     });
   }, [allTargets, selectedSector, statusFilter, searchQuery, recordsMap]);
 
-  const capturedCount = Array.from(recordsMap.values()).filter((r) => Boolean(r.photoBlob)).length;
+  const capturedCount = Array.from(recordsMap.values()).filter((r) => r.hasPhoto).length;
   const issueCount = Array.from(recordsMap.values()).filter((r) => Boolean(r.issueNote)).length;
   const totalCount = allTargets.length;
   const progressPercent =
@@ -301,11 +302,12 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
         </div>
       </section>
 
-      {/* Grade de Salas e Medidores */}
+      {/* Grade de Salas e Medidores (ocultada enquanto a câmera está aberta para poupar GPU/bateria) */}
+      {cameraTargetIndex === null && (
       <div className="meters-grid">
         {filteredTargets.map((target, idx) => {
           const rec = recordsMap.get(target.targetId);
-          const isCaptured = Boolean(rec?.photoBlob);
+          const isCaptured = Boolean(rec?.hasPhoto);
           const hasIssue = Boolean(rec?.issueNote);
 
           const colorClass =
@@ -365,10 +367,15 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
                   >
                     <Eye size={13} /> Ver
                   </button>
-                  {rec.photoBlob && (
+                  {rec.hasPhoto && (
                     <button
                       className="mini-action-btn"
-                      onClick={() => triggerImmediatePhotoDownload(rec.photoBlob!, target.fileName)}
+                      onClick={async () => {
+                        const full = await getPhotoRecordById(rec.id);
+                        if (full?.photoBlob) {
+                          triggerImmediatePhotoDownload(full.photoBlob, target.fileName);
+                        }
+                      }}
                       title="Baixar .jpg novamente"
                     >
                       <Download size={13} /> .JPG
@@ -387,6 +394,7 @@ export const CollectScreen: React.FC<CollectScreenProps> = ({
           );
         })}
       </div>
+      )}
 
       {/* Modal de Câmera Fullscreen */}
       {cameraTargetIndex !== null && filteredTargets.length > 0 && (

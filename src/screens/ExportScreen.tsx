@@ -12,8 +12,9 @@ import {
   Layers,
   Share2,
 } from 'lucide-react';
-import { CondoStructure, PhotoCampaign, PhotoRecord } from '../types';
+import { CondoStructure, PhotoCampaign, PhotoRecord, PhotoRecordMeta } from '../types';
 import { expandUnitsToMeterTargets } from '../data/luxorLutecia';
+import { getCampaignPhotoRecords } from '../db/database';
 import { exportCampaignPhotosZip } from '../lib/exportZip';
 import { exportCampaignChecklistExcel } from '../lib/exportExcel';
 import { exportCampaignReportPdf } from '../lib/exportPdf';
@@ -21,7 +22,7 @@ import { exportCampaignReportPdf } from '../lib/exportPdf';
 interface ExportScreenProps {
   condo: CondoStructure;
   campaign: PhotoCampaign;
-  records: PhotoRecord[];
+  records: PhotoRecordMeta[];
   onBackToCollect: () => void;
   onBackHome: () => void;
   onNotify: (msg: string) => void;
@@ -42,12 +43,12 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
 
   const targets = useMemo(() => expandUnitsToMeterTargets(condo.units), [condo.units]);
   const recordsMap = useMemo(() => {
-    const map = new Map<string, PhotoRecord>();
+    const map = new Map<string, PhotoRecordMeta>();
     for (const r of records) map.set(r.targetId, r);
     return map;
   }, [records]);
 
-  const photoRecords = useMemo(() => records.filter((r) => Boolean(r.photoBlob)), [records]);
+  const photoRecords = useMemo(() => records.filter((r) => r.hasPhoto), [records]);
   const capturedCount = photoRecords.length;
   const issueCount = useMemo(
     () => records.filter((r) => Boolean(r.issueNote)).length,
@@ -76,7 +77,9 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
     );
     setProgress(0);
     try {
-      await exportCampaignPhotosZip(campaign, photoRecords, {
+      const fullRecords = await getCampaignPhotoRecords(campaign.id);
+      const fullPhotoRecords = fullRecords.filter((r) => Boolean(r.photoBlob));
+      await exportCampaignPhotosZip(campaign, fullPhotoRecords, {
         organizeBySector,
         sectorFilter,
         onProgress: setProgress,
@@ -101,7 +104,9 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
     setBusyTask('Preparando ZIP para compartilhamento...');
     setProgress(0);
     try {
-      const blob = await exportCampaignPhotosZip(campaign, photoRecords, {
+      const fullRecords = await getCampaignPhotoRecords(campaign.id);
+      const fullPhotoRecords = fullRecords.filter((r) => Boolean(r.photoBlob));
+      const blob = await exportCampaignPhotosZip(campaign, fullPhotoRecords, {
         organizeBySector,
         onProgress: setProgress,
       });
@@ -128,7 +133,10 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
     setBusyTask('Montando relatório PDF...');
     setProgress(0);
     try {
-      await exportCampaignReportPdf(campaign, targets, recordsMap, includePdfPhotos, setProgress);
+      const fullRecords = await getCampaignPhotoRecords(campaign.id);
+      const fullMap = new Map<string, PhotoRecord>();
+      for (const r of fullRecords) fullMap.set(r.targetId, r);
+      await exportCampaignReportPdf(campaign, targets, fullMap, includePdfPhotos, setProgress);
       onNotify('Relatório PDF baixado com sucesso!');
     } catch {
       onNotify('Erro ao gerar relatório PDF.');
@@ -137,9 +145,12 @@ export const ExportScreen: React.FC<ExportScreenProps> = ({
     }
   };
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     try {
-      exportCampaignChecklistExcel(campaign, targets, recordsMap);
+      const fullRecords = await getCampaignPhotoRecords(campaign.id);
+      const fullMap = new Map<string, PhotoRecord>();
+      for (const r of fullRecords) fullMap.set(r.targetId, r);
+      exportCampaignChecklistExcel(campaign, targets, fullMap);
       onNotify('Planilha Excel de conferência baixada!');
     } catch {
       onNotify('Erro ao gerar planilha Excel.');

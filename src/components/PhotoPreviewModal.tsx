@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Camera, Download, Trash2, X } from 'lucide-react';
-import { MeterTarget, PhotoRecord } from '../types';
+import { MeterTarget, PhotoRecordMeta } from '../types';
+import { getPhotoRecordById } from '../db/database';
 import { triggerImmediatePhotoDownload } from '../lib/immediateDownload';
 
 interface PhotoPreviewModalProps {
   target: MeterTarget;
-  record: PhotoRecord;
+  record: PhotoRecordMeta;
   onRetake: () => void;
   onDelete: () => Promise<void>;
   onClose: () => void;
@@ -19,20 +20,45 @@ export const PhotoPreviewModal: React.FC<PhotoPreviewModalProps> = ({
   onClose,
 }) => {
   const [photoUrl, setPhotoUrl] = useState<string>('');
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [loading, setLoading] = useState<boolean>(record.hasPhoto);
 
   useEffect(() => {
-    if (!record.photoBlob) {
-      setPhotoUrl('');
-      return;
+    let active = true;
+    let objectUrl = '';
+
+    async function loadBlob() {
+      if (!record.hasPhoto) {
+        setPhotoUrl('');
+        setPhotoBlob(null);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      const full = await getPhotoRecordById(record.id);
+      if (!active) return;
+      if (full?.photoBlob) {
+        objectUrl = URL.createObjectURL(full.photoBlob);
+        setPhotoBlob(full.photoBlob);
+        setPhotoUrl(objectUrl);
+      } else {
+        setPhotoUrl('');
+        setPhotoBlob(null);
+      }
+      setLoading(false);
     }
-    const url = URL.createObjectURL(record.photoBlob);
-    setPhotoUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [record.photoBlob]);
+
+    loadBlob();
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [record.id, record.hasPhoto, record.capturedAt]);
 
   const handleDownloadNow = () => {
-    if (record.photoBlob) {
-      triggerImmediatePhotoDownload(record.photoBlob, target.fileName);
+    if (photoBlob) {
+      triggerImmediatePhotoDownload(photoBlob, target.fileName);
     }
   };
 
@@ -64,7 +90,11 @@ export const PhotoPreviewModal: React.FC<PhotoPreviewModalProps> = ({
           </div>
         )}
 
-        {photoUrl ? (
+        {loading ? (
+          <div className="empty-state" style={{ padding: '28px', textAlign: 'center' }}>
+            <p>Carregando imagem...</p>
+          </div>
+        ) : photoUrl ? (
           <div className="preview-image-container">
             <img src={photoUrl} alt={target.fileName} className="preview-image-full" />
           </div>
@@ -76,23 +106,23 @@ export const PhotoPreviewModal: React.FC<PhotoPreviewModalProps> = ({
 
         <div className="preview-meta-bar">
           <span>📅 {new Date(record.capturedAt).toLocaleString('pt-BR')}</span>
-          {record.width && record.height && record.photoBlob && (
+          {record.width && record.height && photoBlob && (
             <span>
               📐 {record.width}×{record.height}px (
-              {(record.photoBlob.size / 1024 / 1024).toFixed(2)} MB)
+              {(photoBlob.size / 1024 / 1024).toFixed(2)} MB)
             </span>
           )}
         </div>
 
         <div className="preview-actions-row">
-          {record.photoBlob && (
+          {photoBlob && (
             <button className="btn-secondary" onClick={handleDownloadNow}>
               <Download size={18} /> Baixar {target.fileName}
             </button>
           )}
 
           <button className="btn-primary" onClick={onRetake}>
-            <Camera size={18} /> {record.photoBlob ? 'Refazer Foto' : 'Tirar Foto Agora'}
+            <Camera size={18} /> {record.hasPhoto ? 'Refazer Foto' : 'Tirar Foto Agora'}
           </button>
 
           <button className="btn-danger" onClick={onDelete} title="Excluir registro">

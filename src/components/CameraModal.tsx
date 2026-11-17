@@ -13,7 +13,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { MeterTarget, PhotoRecord } from '../types';
+import { MeterTarget, PhotoRecordMeta } from '../types';
 import {
   captureHighResFrame,
   getTapShutterPreference,
@@ -37,7 +37,7 @@ interface CameraModalProps {
   condoName: string;
   targets: MeterTarget[];
   currentIndex: number;
-  recordsMap: Map<string, PhotoRecord>;
+  recordsMap: Map<string, PhotoRecordMeta>;
   onSelectIndex: (idx: number) => void;
   onCapturePhoto: (
     target: MeterTarget,
@@ -87,7 +87,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
   const currentTarget = targets[currentIndex] || targets[0];
   const existingRecord = currentTarget ? recordsMap.get(currentTarget.targetId) : undefined;
-  const isAlreadyCaptured = Boolean(existingRecord?.photoBlob);
+  const isAlreadyCaptured = Boolean(existingRecord?.hasPhoto);
 
   useEffect(() => {
     let mounted = true;
@@ -218,7 +218,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           }
         : undefined;
 
-      const { blob, width, height } = await captureHighResFrame(videoRef.current, 0.96, stampInfo);
+      const { blob, width, height } = await captureHighResFrame(videoRef.current, 0.9, stampInfo);
       await processCapturedBlob(blob, { width, height });
     } catch {
       onNotify('Erro ao capturar foto. Tente novamente.');
@@ -269,7 +269,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             fileName: currentTarget.fileName,
           }
         : undefined;
-      const { blob, width, height } = await processUploadedPhotoFile(file, 0.96, stampInfo);
+      const { blob, width, height } = await processUploadedPhotoFile(file, 0.9, stampInfo);
       await processCapturedBlob(blob, { width, height });
     } finally {
       setIsShooting(false);

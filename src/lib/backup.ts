@@ -1,5 +1,5 @@
 import { saveAs } from 'file-saver';
-import { db } from '../db/database';
+import { db, toRecordMeta } from '../db/database';
 import { CondoStructure, PhotoCampaign, PhotoRecord } from '../types';
 
 interface SerializedRecord extends Omit<PhotoRecord, 'photoBlob'> {
@@ -86,12 +86,13 @@ export async function restoreLocalBackupJson(file: File): Promise<{
     };
   });
 
-  await db.transaction('rw', db.condos, db.campaigns, db.records, async () => {
+  await db.transaction('rw', db.condos, db.campaigns, db.records, db.recordMetas, async () => {
     if (Array.isArray(payload.condos)) {
       await db.condos.bulkPut(payload.condos);
     }
     await db.campaigns.bulkPut(payload.campaigns);
     await db.records.bulkPut(restoredRecords);
+    await db.recordMetas.bulkPut(restoredRecords.map(toRecordMeta));
   });
 
   return {
