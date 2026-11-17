@@ -77,55 +77,106 @@ export async function openHighResCameraStream(): Promise<MediaStream> {
 }
 
 /**
- * Desenha um rodapé discreto e nítido (carimbo/watermark) na imagem com os dados da Sala e Data/Hora.
+ * Ajusta automaticamente o tamanho da fonte para garantir que o texto caiba
+ * perfeitamente dentro de `maxWidth` sem nunca cortar nem sobrepor.
  */
-function drawWatermarkOnCanvas(
+function fitFontSize(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  initialSize: number,
+  minSize: number,
+  maxWidth: number,
+  weight = 'bold'
+): number {
+  let size = initialSize;
+  while (size > minSize) {
+    ctx.font = `${weight} ${size}px sans-serif`;
+    if (ctx.measureText(text).width <= maxWidth) {
+      return size;
+    }
+    size -= 1;
+  }
+  return minSize;
+}
+
+/**
+ * Desenha um rodapé em 2 linhas separadas (nunca sobrepõe textos, mesmo em fotos verticais estreitas).
+ * Linha 1 (Destaque): Sala + Medidor + Condomínio
+ * Linha 2 (Metadados): Nome do Arquivo + Data/Hora
+ */
+export function drawWatermarkOnCanvas(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
   stamp: PhotoStampInfo
 ): void {
-  const barHeight = Math.max(48, Math.round(height * 0.065));
-  const yTop = height - barHeight;
-
-  // Fundo escuro translúcido no rodapé
-  ctx.fillStyle = 'rgba(7, 24, 34, 0.82)';
-  ctx.fillRect(0, yTop, width, barHeight);
-
-  // Linha superior colorida conforme quantidade de medidores
-  ctx.fillStyle =
-    stamp.totalMeters === 2 ? '#facc15' : stamp.totalMeters >= 4 ? '#38bdf8' : '#5eead4';
-  ctx.fillRect(0, yTop, width, Math.max(3, Math.round(barHeight * 0.07)));
-
-  const fontSize = Math.max(16, Math.round(barHeight * 0.38));
-  ctx.font = `bold ${fontSize}px sans-serif`;
-  ctx.textBaseline = 'middle';
+  const padX = Math.max(16, Math.round(width * 0.03));
+  const maxTextWidth = Math.max(100, width - padX * 2);
 
   const meterLabel =
     stamp.totalMeters === 1
       ? '1 Medidor'
-      : `Medidor ${stamp.meterIndex}/${stamp.totalMeters}`;
+      : `Medidor ${stamp.meterIndex} de ${stamp.totalMeters}`;
 
-  const leftText = `${stamp.condoName} • Sala ${stamp.unitLabel} (${meterLabel})${
+  const line1Text = `Sala ${stamp.unitLabel} (${meterLabel}) • ${stamp.condoName}${
     stamp.issueNote ? ` [⚠️ ${stamp.issueNote}]` : ''
   }`;
-  const rightText = `${new Date().toLocaleString('pt-BR')} • ${stamp.fileName}`;
+  const line2Text = `Arquivo: ${stamp.fileName}  |  ${new Date().toLocaleString('pt-BR')}`;
 
-  const padX = Math.max(16, Math.round(width * 0.02));
-  const centerY = yTop + barHeight / 2 + 2;
+  // Calcula fontes proporcionais à menor dimensão e garante que caibam na largura
+  const baseDim = Math.min(width, height);
+  const initialTitleSize = Math.max(16, Math.min(38, Math.round(baseDim * 0.032)));
+  const titleFontSize = fitFontSize(ctx, line1Text, initialTitleSize, 12, maxTextWidth, 'bold');
 
-  ctx.fillStyle = '#5eead4';
+  const initialSubSize = Math.max(13, Math.round(titleFontSize * 0.82));
+  const subFontSize = fitFontSize(ctx, line2Text, initialSubSize, 11, maxTextWidth, '600');
+
+  const lineGap = Math.max(6, Math.round(titleFontSize * 0.38));
+  const padY = Math.max(10, Math.round(titleFontSize * 0.55));
+  const accentHeight = Math.max(4, Math.round(titleFontSize * 0.15));
+
+  const barHeight = accentHeight + padY + titleFontSize + lineGap + subFontSize + padY;
+  const yTop = height - barHeight;
+
+  ctx.save();
+
+  // Fundo escuro sólido-translúcido de alto contraste no rodapé
+  ctx.fillStyle = 'rgba(7, 24, 34, 0.9)';
+  ctx.fillRect(0, yTop, width, barHeight);
+
+  // Faixa superior colorida conforme quantidade de medidores
+  const accentColor =
+    stamp.totalMeters === 2 ? '#facc15' : stamp.totalMeters >= 4 ? '#38bdf8' : '#5eead4';
+  ctx.fillStyle = accentColor;
+  ctx.fillRect(0, yTop, width, accentHeight);
+
   ctx.textAlign = 'left';
-  ctx.fillText(leftText, padX, centerY);
+  ctx.textBaseline = 'top';
 
-  ctx.fillStyle = '#e2e8f0';
-  ctx.textAlign = 'right';
-  ctx.fillText(rightText, width - padX, centerY);
+  // Sombra sutil para leitura cristalina
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
+
+  // Linha 1 (Topo do rodapé)
+  const line1Y = yTop + accentHeight + padY;
+  ctx.font = `bold ${titleFontSize}px sans-serif`;
+  ctx.fillStyle = accentColor;
+  ctx.fillText(line1Text, padX, line1Y, maxTextWidth);
+
+  // Linha 2 (Abaixo da Linha 1 — impossível sobrepor)
+  const line2Y = line1Y + titleFontSize + lineGap;
+  ctx.font = `600 ${subFontSize}px sans-serif`;
+  ctx.fillStyle = '#f1f5f9';
+  ctx.fillText(line2Text, padX, line2Y, maxTextWidth);
+
+  ctx.restore();
 }
 
 /**
  * Captura o frame atual do elemento <video> na resolução máxima real do stream,
- * aplicando opcionalmente o carimbo da sala/data e gerando um JPEG de altíssima nitidez (0.96).
+ * aplicando opcionalmente o carimbo em 2 linhas e gerando um JPEG de altíssima nitidez (0.96).
  */
 export async function captureHighResFrame(
   video: HTMLVideoElement,
@@ -162,6 +213,58 @@ export async function captureHighResFrame(
   });
 
   return { blob, width, height };
+}
+
+/**
+ * Aplica o carimbo de 2 linhas também quando a foto vem da câmera nativa do sistema (<input type="file">).
+ */
+export async function processUploadedPhotoFile(
+  file: Blob,
+  quality = 0.96,
+  stamp?: PhotoStampInfo
+): Promise<CapturedPhotoResult> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const width = img.naturalWidth || img.width || 1920;
+      const height = img.naturalHeight || img.height || 1080;
+
+      if (!stamp) {
+        URL.revokeObjectURL(url);
+        resolve({ blob: file, width, height });
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        resolve({ blob: file, width, height });
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+      drawWatermarkOnCanvas(ctx, width, height, stamp);
+
+      canvas.toBlob(
+        (b) => {
+          URL.revokeObjectURL(url);
+          if (b) resolve({ blob: b, width, height });
+          else resolve({ blob: file, width, height });
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = (err) => {
+      URL.revokeObjectURL(url);
+      reject(err);
+    };
+    img.src = url;
+  });
 }
 
 /**

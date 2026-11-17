@@ -20,6 +20,7 @@ import {
   getTrackCapabilities,
   getWatermarkPreference,
   openHighResCameraStream,
+  processUploadedPhotoFile,
   setCameraTorch,
   setCameraZoom,
   setTapShutterPreference,
@@ -258,7 +259,18 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     if (!file || !currentTarget) return;
     setIsShooting(true);
     try {
-      await processCapturedBlob(file);
+      const stampInfo = watermarkOn
+        ? {
+            condoName,
+            unitLabel: currentTarget.unitLabel,
+            sector: currentTarget.sector,
+            meterIndex: currentTarget.meterIndex,
+            totalMeters: currentTarget.totalMeters,
+            fileName: currentTarget.fileName,
+          }
+        : undefined;
+      const { blob, width, height } = await processUploadedPhotoFile(file, 0.96, stampInfo);
+      await processCapturedBlob(blob, { width, height });
     } finally {
       setIsShooting(false);
       e.target.value = '';

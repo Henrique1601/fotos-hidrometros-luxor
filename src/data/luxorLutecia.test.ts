@@ -11,6 +11,7 @@ import {
   setAutoDownloadPreference,
 } from '../lib/immediateDownload';
 import {
+  drawWatermarkOnCanvas,
   getTapShutterPreference,
   getWatermarkPreference,
   setTapShutterPreference,
@@ -80,5 +81,42 @@ describe('Luxor e Lutécia — Mapeamento Oficial de Salas e Medidores', () => {
     setTapShutterPreference(true);
     expect(getTapShutterPreference()).toBe(true);
     setTapShutterPreference(false);
+  });
+
+  it('desenha o carimbo (watermark) em 2 linhas verticais separadas sem sobrepor textos', () => {
+    const drawnCalls: Array<{ text: string; x: number; y: number; maxWidth?: number }> = [];
+    const mockCtx = {
+      font: '',
+      fillStyle: '',
+      textAlign: 'left',
+      textBaseline: 'top',
+      shadowColor: '',
+      shadowBlur: 0,
+      shadowOffsetX: 0,
+      shadowOffsetY: 0,
+      save: () => {},
+      restore: () => {},
+      fillRect: () => {},
+      measureText: (txt: string) => ({ width: txt.length * 10 }),
+      fillText: (text: string, x: number, y: number, maxWidth?: number) => {
+        drawnCalls.push({ text, x, y, maxWidth });
+      },
+    } as unknown as CanvasRenderingContext2D;
+
+    // Testa em foto vertical de celular (720x1280)
+    drawWatermarkOnCanvas(mockCtx, 720, 1280, {
+      condoName: 'Luxor e Lutécia',
+      unitLabel: '502',
+      sector: '5º Andar',
+      meterIndex: 1,
+      totalMeters: 2,
+      fileName: '502-1.jpg',
+    });
+
+    expect(drawnCalls.length).toBe(2);
+    expect(drawnCalls[0].text).toContain('Sala 502');
+    expect(drawnCalls[1].text).toContain('502-1.jpg');
+    // Garante que as duas linhas estão em coordenadas Y totalmente separadas (nunca sobrepostas)
+    expect(drawnCalls[1].y - drawnCalls[0].y).toBeGreaterThanOrEqual(18);
   });
 });
