@@ -12,8 +12,10 @@ import {
 } from '../lib/immediateDownload';
 import {
   drawWatermarkOnCanvas,
+  getConfirmPhotoPreference,
   getTapShutterPreference,
   getWatermarkPreference,
+  setConfirmPhotoPreference,
   setTapShutterPreference,
   setWatermarkPreference,
 } from '../lib/camera';
@@ -81,6 +83,11 @@ describe('Luxor e Lutécia — Mapeamento Oficial de Salas e Medidores', () => {
     setTapShutterPreference(true);
     expect(getTapShutterPreference()).toBe(true);
     setTapShutterPreference(false);
+
+    expect(getConfirmPhotoPreference()).toBe(true);
+    setConfirmPhotoPreference(false);
+    expect(getConfirmPhotoPreference()).toBe(false);
+    setConfirmPhotoPreference(true);
   });
 
   it('desenha o carimbo (watermark) em 2 linhas verticais separadas sem sobrepor textos', () => {

@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Camera,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Download,
+  Eye,
   Flashlight,
   Hand,
   RefreshCw,
@@ -16,6 +18,7 @@ import {
 import { MeterTarget, PhotoRecordMeta } from '../types';
 import {
   captureHighResFrame,
+  getConfirmPhotoPreference,
   getTapShutterPreference,
   getTrackCapabilities,
   getWatermarkPreference,
@@ -23,6 +26,7 @@ import {
   processUploadedPhotoFile,
   setCameraTorch,
   setCameraZoom,
+  setConfirmPhotoPreference,
   setTapShutterPreference,
   setWatermarkPreference,
   triggerHapticFeedback,
@@ -77,6 +81,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [zoom, setZoom] = useState(1);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
   const [autoDownload, setAutoDownload] = useState<boolean>(() => getAutoDownloadPreference());
+  const [confirmMode, setConfirmMode] = useState<boolean>(() => getConfirmPhotoPreference());
   const [watermarkOn, setWatermarkOn] = useState<boolean>(() => getWatermarkPreference());
   const [tapShutterOn, setTapShutterOn] = useState<boolean>(() => getTapShutterPreference());
   const [autoAdvance, setAutoAdvance] = useState<boolean>(true);
@@ -84,6 +89,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [flashEffect, setFlashEffect] = useState(false);
   const [lastShotTargetIndex, setLastShotTargetIndex] = useState<number | null>(null);
   const [showIssueMenu, setShowIssueMenu] = useState(false);
+  const [pendingReview, setPendingReview] = useState<{
+    blob: Blob;
+    url: string;
+    dims?: { width: number; height: number };
+    target: MeterTarget;
+    targetIndex: number;
+  } | null>(null);
 
   const currentTarget = targets[currentIndex] || targets[0];
   const existingRecord = currentTarget ? recordsMap.get(currentTarget.targetId) : undefined;
@@ -141,6 +153,25 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     await setCameraZoom(streamRef.current, val);
   };
 
+  useEffect(() => {
+    return () => {
+      if (pendingReview?.url) {
+        URL.revokeObjectURL(pendingReview.url);
+      }
+    };
+  }, [pendingReview]);
+
+  const handleToggleConfirmMode = () => {
+    const next = !confirmMode;
+    setConfirmMode(next);
+    setConfirmPhotoPreference(next);
+    onNotify(
+      next
+        ? 'Confirmação de foto ATIVADA: revise cada foto antes de salvar e baixar'
+        : 'Confirmação de foto DESATIVADA: salva e baixa direto no clique'
+    );
+  };
+
   const handleToggleAutoDownload = () => {
     const next = !autoDownload;
     setAutoDownload(next);
@@ -170,6 +201,34 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     );
   };
 
+  const commitCapturedBlob = useCallback(
+    async (
+      target: MeterTarget,
+      targetIdx: number,
+      blob: Blob,
+      dims?: { width: number; height: number },
+      issueNote?: string
+    ) => {
+      await onCapturePhoto(target, blob, dims, issueNote);
+
+      if (autoDownload) {
+        triggerImmediatePhotoDownload(blob, target.fileName);
+      }
+
+      setLastShotTargetIndex(targetIdx);
+      onNotify(
+        autoDownload
+          ? `📸 Salva e baixada: ${target.fileName}`
+          : `📸 Foto salva: ${target.fileName}`
+      );
+
+      if (autoAdvance && targetIdx < targets.length - 1) {
+        onSelectIndex(targetIdx + 1);
+      }
+    },
+    [autoAdvance, autoDownload, onCapturePhoto, onNotify, onSelectIndex, targets.length]
+  );
+
   const processCapturedBlob = useCallback(
     async (blob: Blob, dims?: { width: number; height: number }, issueNote?: string) => {
       if (!currentTarget) return;
@@ -178,25 +237,37 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       setFlashEffect(true);
       setTimeout(() => setFlashEffect(false), 180);
 
-      await onCapturePhoto(currentTarget, blob, dims, issueNote);
-
-      if (autoDownload) {
-        triggerImmediatePhotoDownload(blob, currentTarget.fileName);
+      if (confirmMode && !issueNote) {
+        const url = URL.createObjectURL(blob);
+        setPendingReview({
+          blob,
+          url,
+          dims,
+          target: currentTarget,
+          targetIndex: currentIndex,
+        });
+        return;
       }
 
-      setLastShotTargetIndex(currentIndex);
-      onNotify(
-        autoDownload
-          ? `📸 Salva e baixada: ${currentTarget.fileName}`
-          : `📸 Foto salva: ${currentTarget.fileName}`
-      );
-
-      if (autoAdvance && currentIndex < targets.length - 1) {
-        onSelectIndex(currentIndex + 1);
-      }
+      await commitCapturedBlob(currentTarget, currentIndex, blob, dims, issueNote);
     },
-    [autoAdvance, autoDownload, currentIndex, currentTarget, onCapturePhoto, onNotify, onSelectIndex, targets.length]
+    [commitCapturedBlob, confirmMode, currentIndex, currentTarget]
   );
+
+  const handleConfirmPendingReview = useCallback(async () => {
+    if (!pendingReview) return;
+    const { target, targetIndex, blob, dims, url } = pendingReview;
+    setPendingReview(null);
+    URL.revokeObjectURL(url);
+    await commitCapturedBlob(target, targetIndex, blob, dims);
+  }, [commitCapturedBlob, pendingReview]);
+
+  const handleRejectPendingReview = useCallback(() => {
+    if (!pendingReview) return;
+    URL.revokeObjectURL(pendingReview.url);
+    setPendingReview(null);
+    onNotify('Foto descartada. Tire novamente.');
+  }, [onNotify, pendingReview]);
 
   const handleShutterClick = useCallback(async () => {
     if (!currentTarget || isShooting) return;
@@ -230,6 +301,17 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   // Suporte a disparo por Tecla de Volume / Espaço / Enter (gatilhos Bluetooth ou uma mão só)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (pendingReview) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleConfirmPendingReview();
+        } else if (e.key === 'Escape' || e.key === 'Backspace') {
+          e.preventDefault();
+          handleRejectPendingReview();
+        }
+        return;
+      }
+
       if (e.key === ' ' || e.key === 'Enter' || e.key === 'AudioVolumeUp' || e.key === 'AudioVolumeDown') {
         e.preventDefault();
         handleShutterClick();
@@ -241,7 +323,15 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [currentIndex, handleShutterClick, onSelectIndex, targets.length]);
+  }, [
+    currentIndex,
+    handleConfirmPendingReview,
+    handleRejectPendingReview,
+    handleShutterClick,
+    onSelectIndex,
+    pendingReview,
+    targets.length,
+  ]);
 
   const handleRegisterIssue = async (reason: string) => {
     if (!currentTarget) return;
@@ -297,6 +387,15 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         </button>
 
         <div className="camera-top-Controls">
+          <button
+            className={`pill-toggle ${confirmMode ? 'active-cyan' : ''}`}
+            onClick={handleToggleConfirmMode}
+            title="Visualizar e confirmar se a foto ficou boa antes de salvar e baixar"
+          >
+            <Eye size={14} />
+            <span>Confirmar: {confirmMode ? 'ON' : 'OFF'}</span>
+          </button>
+
           <button
             className={`pill-toggle ${autoDownload ? 'active-cyan' : ''}`}
             onClick={handleToggleAutoDownload}
@@ -504,6 +603,55 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Tela de Confirmação da Foto Capturada */}
+      {pendingReview && (
+        <div className="camera-review-overlay">
+          <div className="camera-review-header">
+            <div>
+              <span className="review-title">
+                Confirmar Foto — Sala {pendingReview.target.unitLabel}
+              </span>
+              <span className="review-subtitle">
+                {pendingReview.target.totalMeters === 1
+                  ? '1 Medidor'
+                  : `Medidor ${pendingReview.target.meterIndex} de ${pendingReview.target.totalMeters}`}{' '}
+                • Arquivo: <strong>{pendingReview.target.fileName}</strong>
+              </span>
+            </div>
+          </div>
+
+          <div className="camera-review-image-wrap">
+            <img
+              src={pendingReview.url}
+              alt={pendingReview.target.fileName}
+              className="camera-review-image"
+            />
+          </div>
+
+          <div className="camera-review-question">A foto ficou nítida e boa?</div>
+
+          <div className="camera-review-actions">
+            <button
+              className="review-btn-retake"
+              onClick={handleRejectPendingReview}
+            >
+              <RefreshCw size={20} />
+              <span>Não, Refazer</span>
+            </button>
+
+            <button
+              className="review-btn-confirm"
+              onClick={handleConfirmPendingReview}
+            >
+              <Check size={22} />
+              <span>
+                {autoDownload ? 'Sim, Salvar e Baixar' : 'Sim, Confirmar Foto'}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
 
       <input
         ref={fileInputRef}

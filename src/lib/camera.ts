@@ -16,6 +16,25 @@ export interface PhotoStampInfo {
 
 const WATERMARK_PREF_KEY = 'fotohidro_watermark_enabled';
 const TAP_SHUTTER_PREF_KEY = 'fotohidro_tap_shutter_enabled';
+const CONFIRM_PHOTO_PREF_KEY = 'fotohidro_confirm_photo_enabled';
+
+export function getConfirmPhotoPreference(): boolean {
+  try {
+    const raw = localStorage.getItem(CONFIRM_PHOTO_PREF_KEY);
+    if (raw === null) return true;
+    return raw === 'true';
+  } catch {
+    return true;
+  }
+}
+
+export function setConfirmPhotoPreference(enabled: boolean): void {
+  try {
+    localStorage.setItem(CONFIRM_PHOTO_PREF_KEY, String(enabled));
+  } catch {
+    // ignore
+  }
+}
 
 export function getWatermarkPreference(): boolean {
   try {
